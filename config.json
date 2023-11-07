@@ -1,4 +1,9 @@
 {
-    "hoge": "hoge",
-    "fuga": "fuga"
+    "model": "gpt-4-1106-preview",
+    "model_v": "gpt-4-vision-preview",
+    "ignore_channel": "1156520528551608343",
+    "ch1": "",
+    "ch2": "",
+    "ch3": "",
+    "ch4": ""
 }
