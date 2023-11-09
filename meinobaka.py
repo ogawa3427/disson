@@ -115,7 +115,7 @@ async def on_message(message):
                 ]
                 }
             ],
-            "max_tokens": 1000,
+            "max_tokens": 1000
         }
 
     # APIリクエストのヘッダー
@@ -134,6 +134,11 @@ async def on_message(message):
         return
     # 画像がない場合はテキストのみで処理
     else:
+        if client.user.mentioned_in(message):
+            model = config["ogawamodel"]
+        else:
+            model = config["model"]
+        
         print('text')
         # Discordメッセージをクリーンアップ（メンション等を取り除く）
         content = re.sub(r'<@!?(\d+)>', '', message.content)

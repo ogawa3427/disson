@@ -1,5 +1,6 @@
 {
     "model": "gpt-4-1106-preview",
+    "ogawamodel": "ft:gpt-3.5-turbo-1106:personal::8J5j6xUZ",
     "model_v": "gpt-4-vision-preview",
     "ignore_channel": "1156520528551608343",
     "ch1": "",
