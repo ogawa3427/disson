@@ -1,10 +1,13 @@
 {
     "model": "gpt-4-1106-preview",
     "ogawamodel": "ft:gpt-3.5-turbo-1106:personal::8J5j6xUZ",
+    "visionmodel": "gpt-4-vision-preview",
     "model_v": "gpt-4-vision-preview",
     "ignore_channel": "1156520528551608343",
-    "ch1": "",
-    "ch2": "",
-    "ch3": "",
-    "ch4": ""
+    "ch0": "1156520755845148712",
+    "ch1": "1171400487388594256",
+    "ch2": "1171400510172057654",
+    "ch3": "1171400531818848366",
+    "ch4": "1171400550982631445",
+    "test_ch": "1171380456869077033"
 }

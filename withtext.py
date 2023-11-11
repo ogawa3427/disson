@@ -22,7 +22,6 @@ logger.setLevel(INFO)
 # 設定ファイルの読み込み
 with open("config.json", "r", encoding="utf-8") as f:
     config = json.load(f)
-
 #リッスン先を設定
 args = sys.argv
 if args[1] == "t":
@@ -39,6 +38,10 @@ openai.api_key = os.getenv('OPENAI_API_KEY')
 intents = discord.Intents.all()
 client = discord.Client(intents=intents)
 
+#init
+conversation = {}
+
+
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode('utf-8')
@@ -50,14 +53,23 @@ async def on_ready():
     print(listen_channel)
     print('------')
 
+
 @client.event
 async def on_message(message):
+    global conversation
     if message.author == client.user:
         return
     if not str(message.channel.id) in listen_channel:
         return
+    
+    if message.content.startswith('/'):
+        if not message.content.startswith('//'):
+            print('command')
+            return
+        else:
+            srawsc = True
 
-    print(message)
+    print(message.content)
     
     # メッセージに画像が添付されている場合
    # Discordメッセージに添付されている画像をBase64にエンコード
@@ -141,32 +153,51 @@ async def on_message(message):
     # 応答からテキストを抽出してDiscordに送信
         answer = response_json['choices'][0]['message']['content'] if 'choices' in response_json else response_json
         await message.channel.send(answer)
+
         return
     # 画像がない場合はテキストのみで処理
     else:
+        if message.content == "quit":
+            print(conversation)
+            conversation = {}
+            await message.channel.send("[System]Conversation cleared.")
+            return
+
+        messages = []
+        if conversation:
+            for i in range(int(len(conversation)//2)):
+                messages.append({"role": "user", "content": conversation[f"{i}q"]})
+                messages.append({"role": "system", "content": conversation[f"{i}a"]})
+            messages.append({"role": "user", "content": message.content})
+        else:
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": message.content}
+            ]
+        
         if client.user.mentioned_in(message):
             model = config["ogawamodel"]
         else:
             model = config["model"]
-        
+
         print('text')
-        # Discordメッセージをクリーンアップ（メンション等を取り除く）
         content = re.sub(r'<@!?(\d+)>', '', message.content)
 
         # OpenAI APIにメッセージを送信して回答を取得
         response = aiclient.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": content}
-            ]
+            messages=messages
         )
 
         # 応答からテキストを抽出
         answer = response.choices[0].message.content
 
-        # Discordに回答を送信
         await message.channel.send(answer)
+
+    #CONTEXTに追加
+        new_n = str(int(len(conversation)//2))
+        conversation[new_n + "q"] = content
+        conversation[new_n + "a"] = answer
 
 # Discordボットを起動
 client.run(TOKEN)
