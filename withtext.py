@@ -39,7 +39,8 @@ intents = discord.Intents.all()
 client = discord.Client(intents=intents)
 
 #init
-conversation = {}
+messages = []
+image_flag = False
 
 
 def encode_image(image_path):
@@ -47,6 +48,8 @@ def encode_image(image_path):
         return base64.b64encode(image_file.read()).decode('utf-8')
 
 image_path = "saved_image.jpg"
+
+
 @client.event
 async def on_ready():
     logger.info(f'Logged in as {client.user.name} (ID: {client.user.id})')
@@ -54,14 +57,17 @@ async def on_ready():
     print('------')
 
 
+    # メッセージに画像が添付されている場合
 @client.event
 async def on_message(message):
-    global conversation
+    global messages
+    global image_flag
+    print(message)
     if message.author == client.user:
         return
     if not str(message.channel.id) in listen_channel:
         return
-    
+    #エスケープ
     if message.content.startswith('/'):
         if not message.content.startswith('//'):
             print('command')
@@ -69,114 +75,109 @@ async def on_message(message):
         else:
             srawsc = True
 
-    print(message.content)
-    
-    # メッセージに画像が添付されている場合
-   # Discordメッセージに添付されている画像をBase64にエンコード
-    if message.attachments:
-# Discordから取得した画像のバイトデータを読み込む
-        image_bytes = await message.attachments[0].read()
-        image = Image.open(io.BytesIO(image_bytes))
-        
-        # リサイズする最大サイズを設定
-        max_size = 1080, 1080
-        
-        # 画像をリサイズ（アスペクト比を維持）
-        image.thumbnail(max_size, Image.Resampling.LANCZOS)
-        
-        # RGBAモードの画像をRGBモードに変換
-        if image.mode == 'RGBA':
-            image = image.convert('RGB')
-        
-        # JPEGフォーマットで保存するためのバイトストリームを作成
-        # 画像をJPEGフォーマットで保存するためのバイトストリームを作成
-        with io.BytesIO() as output:
-            image.save(output, format="JPEG")
-            data = output.getvalue()
-        
-        # ローカルファイルシステムに画像を保存
-        image_filename = "saved_image.jpg"  # 保存するファイル名
-        with open(image_filename, "wb") as f:
-            f.write(data)
-        
-        # 画像をBase64にエンコード
-        base64_image = base64.b64encode(data).decode('utf-8')
+    if message.content == "quit":
+        print(messages)
+        messages = []
+        image_flag = False
+        await message.channel.send("[System]Conversation cleared.")
+        return
 
-        print(base64_image)
-        
-    # ...[your previous code for image handling]...
+    #print(message.content)
+    message_adder = {
+        "role": "user"
+    }
+    new_content = []
+    # メッセージに画像が添付されている場合
+    if message.attachments or image_flag:
         print('image')
-        base64_image = None
-        image_url = message.attachments[0].url  # 最初の添付ファイルのURLを取得
-        
-        if any(image_url.lower().endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp']):
-            image_bytes = await message.attachments[0].read()  # 画像のバイトデータを取得
-            base64_image = base64.b64encode(image_bytes).decode('utf-8')  # base64にエンコード
-        
-        base64_image = encode_image(image_path)
-            # 画像が含まれている場合のテキストは無視して良いならば、この部分を削除
-            # text_content = message.clean_content
-        content = re.sub(r'<@!?(\d+)>', '', message.content)
-    # OpenAIのAPIに送信するペイロードを構築
-        payload = {
-            "model": "gpt-4-vision-preview",
-            "messages": [
-            {
-                "role": "user",
-                "content": [
+        image_flag = True
+        base64_images = []
+
+        if not messages:
+            message_adder = {}
+            message_adder["role"] = "system"
+            message_adder["content"] = [
                 {
                     "type": "text",
-                    "text": content
-                },
-                {
+                    "text": "You are a helpful assistant."
+                }
+            ]
+            messages.append(message_adder)
+
+        if message.attachments:
+            for attachment in message.attachments:
+                # Discordから取得した画像のバイトデータを読み込む
+                image_bytes = await attachment.read()
+                image = Image.open(io.BytesIO(image_bytes))
+
+                if image.mode == 'RGBA':
+                   image = image.convert('RGB')
+
+                max_size = 512, 512
+                image.thumbnail(max_size, Image.Resampling.LANCZOS)
+
+                with io.BytesIO() as output:
+                    image.save(output, format="JPEG")
+                    data = output.getvalue()
+
+            # 画像をBase64にエンコード
+                base64_image = base64.b64encode(data).decode('utf-8')
+                base64_images.append(base64_image)
+
+
+                pic_part = {
                     "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{base64_image}"
-                    }
+                    "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
                 }
-                ]
-                }
-            ],
-            "max_tokens": 1000
-        }
 
-    # APIリクエストのヘッダー
-        headers = {
-            "Authorization": f"Bearer {openai.api_key}"
-        }
+                new_content.append(pic_part)
 
-    # OpenAIのAPIにリクエストを送信
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=headers, json=payload)
-        response_json = response.json()
-        print(response_json)
+        if message.content:
+            text_part = {
+                "type": "text",
+                "text": re.sub(r'<@!?(\d+)>', '', message.content)
+            }
+            new_content.append(text_part)
 
-    # 応答からテキストを抽出してDiscordに送信
-        answer = response_json['choices'][0]['message']['content'] if 'choices' in response_json else response_json
-        await message.channel.send(answer)
-
-        return
-    # 画像がない場合はテキストのみで処理
-    else:
-        if message.content == "quit":
-            print(conversation)
-            conversation = {}
-            await message.channel.send("[System]Conversation cleared.")
+            message_adder["content"] = new_content
+            messages.append(message_adder)
+            #print(messages)
+        
+        # OpenAIのAPIに送信するペイロードを構築
+            response = aiclient.chat.completions.create(
+                model=config["visionmodel"],
+                messages=messages,
+                max_tokens=1000
+            )
+        # 応答からテキストを抽出してDiscordに送信
+            print(response)
+            answer = response.choices[0].message.content
+            await message.channel.send(answer)
+        # 会話履歴に追加
+            message_adder = {}
+            message_adder["role"] = "assistant"
+            message_adder["content"] = [{"type": "text", "text": answer}]
+            messages.append(message_adder)
+            print("HELLO")
             return
 
-        messages = []
-        if conversation:
-            for i in range(int(len(conversation)//2)):
-                messages.append({"role": "user", "content": conversation[f"{i}q"]})
-                messages.append({"role": "system", "content": conversation[f"{i}a"]})
-            messages.append({"role": "user", "content": message.content})
-        else:
-            messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": message.content}
-            ]
-        
+    # 画像がない場合はテキストのみで処理（以前のコードをそのまま使用）
+    else:
+        if not messages:
+            message_adder = {}
+            message_adder["role"] = "system"
+            message_adder["content"] = "You are a helpful assistant."
+            messages.append(message_adder)
+
+        message_adder = {}
+        message_adder["role"] = "user"
+        message_adder["content"] = [{"type": "text", "text": re.sub(r'<@!?(\d+)>', '', message.content)}]
+        messages.append(message_adder)
+
+               
         if client.user.mentioned_in(message):
             model = config["ogawamodel"]
+            print("ogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawaogawa")
         else:
             model = config["model"]
 
@@ -195,9 +196,11 @@ async def on_message(message):
         await message.channel.send(answer)
 
     #CONTEXTに追加
-        new_n = str(int(len(conversation)//2))
-        conversation[new_n + "q"] = content
-        conversation[new_n + "a"] = answer
+        message_adder = {}
+        message_adder["role"] = "assistant"
+        message_adder["content"] = answer
+        messages.append(message_adder)
+        print(messages)
 
 # Discordボットを起動
 client.run(TOKEN)
